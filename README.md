@@ -167,6 +167,8 @@ DOMAIN=n8n.yourdomain.com ./setup.sh
 
 Point your domain's DNS A record to the VPS IP before running this.
 
+> ⚠️ **Security note:** Without a domain, n8n runs over plain HTTP with no TLS and no rate limiting. This is fine for **local installs** (home server, LAN, testing). For a **public VPS**, always use a domain with HTTPS — otherwise credentials are transmitted unencrypted and the instance is exposed to the internet.
+
 ---
 
 ## Troubleshooting
