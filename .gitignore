@@ -5,3 +5,6 @@ workflows/deployed/
 __pycache__/
 .DS_Store
 node_modules/
+scripts/
+.mcp.json
+.claude/
