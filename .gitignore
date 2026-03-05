@@ -8,3 +8,4 @@ node_modules/
 scripts/
 .mcp.json
 .claude/
+docs/infrastructure.md
