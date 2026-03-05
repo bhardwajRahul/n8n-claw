@@ -189,7 +189,7 @@ SUPABASE_JWT_SECRET=$SUPABASE_JWT_SECRET \
 N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY \
 N8N_HOST=${N8N_HOST:-localhost} \
 N8N_PROTOCOL=${N8N_PROTOCOL:-http} \
-N8N_WEBHOOK_URL=${N8N_URL:-http://localhost:5678} \
+N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678} \
 TIMEZONE=${TIMEZONE:-Europe/Berlin} \
   docker compose up -d 2>&1 | tail -5
 
@@ -246,10 +246,16 @@ NGINX
   systemctl start nginx
   systemctl enable nginx
 
-  # Update n8n webhook URL to HTTPS
-  sed -i "s|^N8N_WEBHOOK_URL=.*|N8N_WEBHOOK_URL=https://${DOMAIN}|" .env
-  sed -i "s|^N8N_HOST=.*|N8N_HOST=${DOMAIN}|" .env
-  sed -i "s|^N8N_PROTOCOL=.*|N8N_PROTOCOL=https|" .env
+  # Update n8n webhook URL to HTTPS (grep+sed: update if exists, append if missing)
+  grep -q "^N8N_WEBHOOK_URL=" .env \
+    && sed -i "s|^N8N_WEBHOOK_URL=.*|N8N_WEBHOOK_URL=https://${DOMAIN}|" .env \
+    || echo "N8N_WEBHOOK_URL=https://${DOMAIN}" >> .env
+  grep -q "^N8N_HOST=" .env \
+    && sed -i "s|^N8N_HOST=.*|N8N_HOST=${DOMAIN}|" .env \
+    || echo "N8N_HOST=${DOMAIN}" >> .env
+  grep -q "^N8N_PROTOCOL=" .env \
+    && sed -i "s|^N8N_PROTOCOL=.*|N8N_PROTOCOL=https|" .env \
+    || echo "N8N_PROTOCOL=https" >> .env
   echo "N8N_SECURE_COOKIE=true" >> .env
   _load_env
 

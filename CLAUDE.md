@@ -231,3 +231,78 @@ docker logs -f n8n-claw
 | PostgREST instead of full Supabase | Lighter, no `supabase_admin` dependencies except Studio |
 | `toolWorkflow` over `toolCode` for tools | More reliable parameter passing via `$json` |
 | `172.17.0.1` for internal service URLs | Docker containers can't reach `localhost` |
+
+---
+
+## Development Environment (Claude Code)
+
+### Live n8n Instance
+
+This project targets a remote n8n instance. All workflow development and testing happens there directly via MCP.
+
+| Setting | Value |
+|---|---|
+| **n8n URL** | `https://static.79.67.224.46.clients.your-server.de/` |
+| **API Key** | stored in `.mcp.json` → `N8N_API_KEY` env var |
+
+### MCP Setup (n8n-mcp)
+
+The `.mcp.json` in this directory configures the `n8n-mcp` MCP server for Claude Code. It gives Claude direct access to the live n8n instance — create, update, validate and activate workflows without leaving the editor.
+
+Key tools available via MCP:
+- `search_nodes` — find n8n nodes by keyword
+- `get_node` — full node documentation
+- `n8n_create_workflow` — create workflow on the live instance
+- `n8n_update_partial_workflow` — incremental edits (preferred over full replace)
+- `n8n_validate_workflow` — validate before activating
+- `n8n_autofix_workflow` — auto-fix common issues
+- `n8n_deploy_template` — deploy community templates
+
+### n8n-skills
+
+The `n8n-skills` Claude Code plugin is installed and provides 7 expert skills that activate automatically:
+
+| Skill | Triggers on |
+|---|---|
+| n8n Expression Syntax | `$json`, `{{}}` patterns, expression errors |
+| n8n MCP Tools Expert | node search, tool usage, workflow management |
+| n8n Workflow Patterns | creating workflows, webhook/AI/scheduled patterns |
+| n8n Validation Expert | validation errors, debugging |
+| n8n Node Configuration | node setup, property dependencies |
+| n8n Code JavaScript | JS in Code nodes |
+| n8n Code Python | Python in Code nodes |
+
+### SSH-Zugang & Datenbank
+
+Server-IP: `46.224.67.79` — SSH-Alias konfiguriert in `~/.ssh/config` als `n8n-claw`.
+
+```bash
+ssh n8n-claw          # Login zum Server
+docker logs -f n8n    # n8n Logs verfolgen
+```
+
+Alle Ports sind nur auf `localhost` gebunden (Security Hardening). Für lokalen Zugriff SSH-Tunnel nutzen:
+
+```bash
+bash scripts/tunnel.sh
+```
+
+Danach verfügbar:
+
+| Service | Lokal | Zugriff |
+|---|---|---|
+| Supabase Studio | http://localhost:3001 | Browser, kein Auth |
+| PostgREST API | http://localhost:8000 | `Authorization: Bearer <SERVICE_KEY>` |
+| Postgres direkt | localhost:5433 | `psql -h localhost -p 5433 -U postgres -d postgres` |
+
+Den Supabase Service Key findest du in `/root/n8n-claw/.env` auf dem Server (`SUPABASE_SERVICE_KEY`).
+
+### Workflow for Adding New Features
+
+1. Design the workflow concept (what trigger → what logic → what output)
+2. Use `search_nodes` to find the right n8n nodes
+3. Use `n8n_create_workflow` to build it on the live instance
+4. Validate with `n8n_validate_workflow` → fix with `n8n_autofix_workflow`
+5. Activate and test via Telegram
+6. Export via n8n UI → sanitize placeholders → save to `workflows/`
+7. Update `setup.sh` `IMPORT_ORDER` if it should ship with new installs
