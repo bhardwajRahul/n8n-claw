@@ -197,7 +197,7 @@ The agent has a multi-layered memory system — it remembers things you tell it 
 **Manual memory:** You can also explicitly ask it to remember something:
 
 > "Remember that I prefer morning meetings before 10am"
-> "Merk dir, dass ich Kaffee schwarz trinke"
+> "Remember that I take my coffee black"
 
 **Memory search:** When relevant, the agent searches its memory to give you contextual answers. With an embedding API key (configured during setup), it uses semantic search — finding memories by meaning, not just keywords.
 
@@ -236,7 +236,7 @@ Tasks support priorities (`low`, `medium`, `high`, `urgent`), due dates, and sub
 The agent can set timed reminders that arrive as Telegram messages at the specified time.
 
 > "Remind me in 30 minutes to check the oven"
-> "Erinner mich morgen um 9 an den Arzttermin"
+> "Remind me tomorrow at 9am about the doctor's appointment"
 > "Set a reminder for Friday at 3pm: submit the report"
 
 Each reminder creates a temporary n8n workflow that fires once at the scheduled time, sends the Telegram message, and deletes itself.
@@ -297,12 +297,6 @@ Point your domain's DNS A record to the VPS IP before running this.
 ---
 
 ## Updating
-
-Re-run `setup.sh` at any time to update:
-
-```bash
-cd n8n-claw && ./setup.sh
-```
 
 **Normal update** — pulls code + Docker images, restarts services. Your personality, credentials, and data are preserved:
 
