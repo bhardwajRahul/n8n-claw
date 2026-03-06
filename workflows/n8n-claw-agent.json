@@ -92,6 +92,17 @@
       "main": [
         [
           {
+            "node": "Analyze Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Photo": {
+      "main": [
+        [
+          {
             "node": "Normalize Message",
             "type": "main",
             "index": 0
@@ -558,6 +569,34 @@
     },
     {
       "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": { "__rl": true, "mode": "list", "value": "gpt-4o-mini", "cachedResultName": "GPT-4O-MINI" },
+        "text": "={{ $('Telegram Trigger').first().json.message.caption || 'Describe this image in detail.' }}",
+        "inputType": "base64",
+        "binaryPropertyName": "data",
+        "options": {
+          "maxTokens": 1000,
+          "detail": "auto"
+        }
+      },
+      "id": "analyze-photo",
+      "name": "Analyze Photo",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        700,
+        -150
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
         "resource": "file",
         "fileId": "={{ $('Telegram Trigger').first().json.message.document.file_id }}"
       },
@@ -621,7 +660,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const msg = $('Telegram Trigger').first().json.message;\n\n// Determine which media path we came from\nlet userMessage = '';\n\n// Check voice transcription result\ntry {\n  const transcript = $('Transcribe Voice').first()?.json?.text;\n  if (transcript) {\n    userMessage = '[Voice message] ' + transcript;\n    return [{ json: { userMessage } }];\n  }\n} catch(e) {}\n\n// Check photo\ntry {\n  const photoNode = $('Get Photo File').first();\n  if (photoNode) {\n    userMessage = msg.caption || '[Photo sent - please describe what you see]';\n    // Binary data passes through automatically via passthroughBinaryImages\n    return [{ json: { userMessage }, binary: photoNode.binary }];\n  }\n} catch(e) {}\n\n// Check document (PDF text extracted by Extract PDF Text node)\ntry {\n  const extracted = $('Extract PDF Text').first();\n  if (extracted) {\n    const filename = msg.document?.file_name || 'unknown';\n    const pdfText = extracted.json.text || '';\n    userMessage = '[Document: ' + filename + ']\\n\\n' + pdfText + '\\n\\n' + (msg.caption || 'Please analyze this document.');\n    return [{ json: { userMessage } }];\n  }\n} catch(e) {}\n\n// Check location\ntry {\n  const locMsg = $('Format Location').first()?.json?.userMessage;\n  if (locMsg) {\n    return [{ json: { userMessage: locMsg } }];\n  }\n} catch(e) {}\n\n// Check unsupported\ntry {\n  const unsup = $('Unsupported Media').first()?.json?.userMessage;\n  if (unsup) {\n    return [{ json: { userMessage: unsup } }];\n  }\n} catch(e) {}\n\n// Default: text message\nuserMessage = msg.text || '';\nreturn [{ json: { userMessage } }];"
+        "jsCode": "const msg = $('Telegram Trigger').first().json.message;\n\n// Determine which media path we came from\nlet userMessage = '';\n\n// Check voice transcription result\ntry {\n  const transcript = $('Transcribe Voice').first()?.json?.text;\n  if (transcript) {\n    userMessage = '[Voice message] ' + transcript;\n    return [{ json: { userMessage } }];\n  }\n} catch(e) {}\n\n// Check photo (analyzed by OpenAI Vision)\ntry {\n  const analysis = $('Analyze Photo').first();\n  if (analysis) {\n    let description = '';\n    const j = analysis.json;\n    if (Array.isArray(j)) {\n      description = j[0]?.content?.[0]?.text || JSON.stringify(j);\n    } else {\n      description = j.text || j.content || JSON.stringify(j);\n    }\n    const caption = msg.caption || '';\n    userMessage = '[Photo analysis]\\n' + description + (caption ? '\\n\\nUser caption: ' + caption : '');\n    return [{ json: { userMessage } }];\n  }\n} catch(e) {}\n\n// Check document (PDF text extracted by Extract PDF Text node)\ntry {\n  const extracted = $('Extract PDF Text').first();\n  if (extracted) {\n    const filename = msg.document?.file_name || 'unknown';\n    const pdfText = extracted.json.text || '';\n    userMessage = '[Document: ' + filename + ']\\n\\n' + pdfText + '\\n\\n' + (msg.caption || 'Please analyze this document.');\n    return [{ json: { userMessage } }];\n  }\n} catch(e) {}\n\n// Check location\ntry {\n  const locMsg = $('Format Location').first()?.json?.userMessage;\n  if (locMsg) {\n    return [{ json: { userMessage: locMsg } }];\n  }\n} catch(e) {}\n\n// Check unsupported\ntry {\n  const unsup = $('Unsupported Media').first()?.json?.userMessage;\n  if (unsup) {\n    return [{ json: { userMessage: unsup } }];\n  }\n} catch(e) {}\n\n// Default: text message\nuserMessage = msg.text || '';\nreturn [{ json: { userMessage } }];"
       },
       "id": "normalize-message",
       "name": "Normalize Message",
