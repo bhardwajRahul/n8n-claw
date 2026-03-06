@@ -4,7 +4,7 @@
 # ============================================================
 
 set -e
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 echo -e "${GREEN}🚀 n8n-claw Setup${NC}"
 echo "=============================="
@@ -168,6 +168,10 @@ if [ -z "$N8N_API_KEY" ] || [[ "$N8N_API_KEY" == your_* ]]; then
     sleep 2; echo -n "."
   done
   echo ""
+  if ! LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -p 5432 -U postgres -d postgres -c "SELECT 1" > /dev/null 2>&1; then
+    echo -e "${RED}❌ Database failed to start. Check: docker logs n8n-claw-db${NC}"
+    exit 1
+  fi
   # Supabase postgres image needs supabase_admin role for extension ownership
   LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -p 5432 -U postgres -d postgres \
     -c "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='supabase_admin') THEN CREATE ROLE supabase_admin LOGIN SUPERUSER; END IF; END\$\$;" \
@@ -437,6 +441,8 @@ PGEOF
   fi
 fi
 fi  # end INSTALL_MODE guard for credentials
+set -e
+rm -f /tmp/pg-cred.json
 
 # ── 11. Prepare + import workflows ──────────────────────────
 declare -A WF_IDS
@@ -757,7 +763,8 @@ echo "  Proactive behavior:"
 echo "    1) Proactive — reminds you of things, checks in, suggests next steps"
 echo "    2) Reactive — only responds when you message first"
 read -rp "  Choose [1]: " PROACTIVE_CHOICE
-case "${PROACTIVE_CHOICE:-1}" in
+PROACTIVE_CHOICE="${PROACTIVE_CHOICE:-1}"
+case "$PROACTIVE_CHOICE" in
   2) PROACTIVE="Only respond when the user initiates. Do not proactively reach out." ;;
   *) PROACTIVE="Be proactive: remind the user of upcoming events, suggest next steps, follow up on open tasks." ;;
 esac
