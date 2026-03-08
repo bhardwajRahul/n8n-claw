@@ -508,6 +508,17 @@ set -e
 rm -f /tmp/pg-cred.json
 
 # ── 11. Prepare + import workflows ──────────────────────────
+
+# Extract credential form webhookId from workflow JSON (used by Library Manager)
+CREDENTIAL_FORM_WEBHOOK_ID=$(python3 -c "
+import json
+wf = json.load(open('workflows/credential-form.json'))
+for n in wf.get('nodes', []):
+    if n.get('webhookId'):
+        print(n['webhookId'])
+        break
+" 2>/dev/null || echo "")
+
 declare -A WF_IDS
 if [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" != "--force" ]; then
   echo -e "\n${GREEN}📦 Skipping workflow import (update mode — use --force to reimport)${NC}"
@@ -544,6 +555,7 @@ for wf in data.get('data', []):
       -e "s|{{SUPABASE_SERVICE_KEY}}|${SUPABASE_SERVICE_KEY}|g" \
       -e "s|{{SUPABASE_ANON_KEY}}|${SUPABASE_ANON_KEY}|g" \
       -e "s|{{TELEGRAM_CHAT_ID}}|${TELEGRAM_CHAT_ID}|g" \
+      -e "s|{{CREDENTIAL_FORM_WEBHOOK_ID}}|${CREDENTIAL_FORM_WEBHOOK_ID}|g" \
       "$out"
 
     resp=$(curl -s -X POST "${N8N_BASE}/api/v1/workflows" \
@@ -573,6 +585,7 @@ for f in workflows/*.json; do
     -e "s|{{SUPABASE_SERVICE_KEY}}|${SUPABASE_SERVICE_KEY}|g" \
     -e "s|{{SUPABASE_ANON_KEY}}|${SUPABASE_ANON_KEY}|g" \
     -e "s|{{TELEGRAM_CHAT_ID}}|${TELEGRAM_CHAT_ID}|g" \
+    -e "s|{{CREDENTIAL_FORM_WEBHOOK_ID}}|${CREDENTIAL_FORM_WEBHOOK_ID}|g" \
     "$out"
   # Credential ID replacements — only if IDs are actually set
   [ -n "$TELEGRAM_CRED_ID" ] && [ "$TELEGRAM_CRED_ID" != "ERR" ] && \
