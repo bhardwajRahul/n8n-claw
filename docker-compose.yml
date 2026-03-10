@@ -136,6 +136,16 @@ services:
       - n8n-claw-net
 
 
+  # ── Email Bridge (IMAP/SMTP REST API) ──────────────────────
+  email-bridge:
+    build: ./email-bridge
+    container_name: n8n-claw-email-bridge
+    restart: unless-stopped
+    expose:
+      - "3100"
+    networks:
+      - n8n-claw-net
+
   # ── SearXNG (Web Search) ────────────────────────────────────
   searxng:
     image: searxng/searxng:latest
