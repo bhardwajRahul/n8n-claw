@@ -863,11 +863,8 @@ if [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" != "--force" ] && [ -z "${E
 fi
 
 # ── 12. Setup Wizard via CLI (no n8n workflow needed) ────────
-if [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" != "--force" ]; then
-  echo -e "\n${GREEN}🧙 Skipping personalization (update mode — use --force to reconfigure)${NC}"
-else
 
-# Load existing personalization as defaults (for --force reconfiguration)
+# Load existing personalization from DB (needed for skip-question and defaults)
 EXISTING_BOT_NAME=$(LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U postgres -d postgres -t -c \
   "SELECT content FROM soul WHERE key='name' LIMIT 1" 2>/dev/null | xargs)
 EXISTING_USER=$(LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U postgres -d postgres -t -c \
@@ -878,6 +875,53 @@ EXISTING_CTX=$(LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -
   "SELECT context FROM user_profiles WHERE user_id = 'telegram:${TELEGRAM_CHAT_ID}' LIMIT 1" 2>/dev/null | xargs)
 EXISTING_LANG=$(LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U postgres -d postgres -t -c \
   "SELECT preferences->>'language' FROM user_profiles WHERE user_id = 'telegram:${TELEGRAM_CHAT_ID}' LIMIT 1" 2>/dev/null | xargs)
+EXISTING_PERSONA=$(LANG=C LC_ALL=C PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U postgres -d postgres -t -c \
+  "SELECT content FROM soul WHERE key='persona' LIMIT 1" 2>/dev/null | sed 's/^ *//;s/ *$//')
+
+SKIP_PERSONALITY=false
+SKIP_EMBEDDING=false
+SKIP_PERSONA_WRITE=false
+
+if [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" != "--force" ]; then
+  echo -e "\n${GREEN}🧙 Skipping personalization (update mode — use --force to reconfigure)${NC}"
+  SKIP_PERSONALITY=true
+  SKIP_PERSONA_WRITE=true
+  SKIP_EMBEDDING=true
+  # Use existing DB values so downstream DB writes (user_profiles, mcp_registry) don't blank
+  BOT_NAME="${EXISTING_BOT_NAME:-Assistant}"
+  USER_DISPLAY="${EXISTING_USER:-User}"
+  PREFERRED_LANG="${EXISTING_LANG:-English}"
+  CTX="${EXISTING_CTX:-Personal assistant and automation}"
+  TIMEZONE="${EXISTING_TZ:-UTC}"
+elif [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" = "--force" ] && [ -n "$EXISTING_BOT_NAME" ]; then
+  # --force on existing install: ask before each block
+  echo ""
+  read -rp "  Change personality settings? (y/N): " CHANGE_PERSONALITY
+  if [[ "${CHANGE_PERSONALITY,,}" =~ ^y ]]; then
+    SKIP_PERSONALITY=false
+  else
+    SKIP_PERSONALITY=true
+    # Use existing DB values so downstream DB writes don't blank them
+    BOT_NAME="$EXISTING_BOT_NAME"
+    USER_DISPLAY="$EXISTING_USER"
+    PREFERRED_LANG="${EXISTING_LANG:-English}"
+    CTX="${EXISTING_CTX:-Personal assistant and automation}"
+    TIMEZONE="${EXISTING_TZ:-UTC}"
+    # Preserve existing persona — extract style from it or keep as-is
+    SKIP_PERSONA_WRITE=true
+    echo -e "  ${GREEN}✅ Keeping current personality${NC}"
+  fi
+  echo ""
+  read -rp "  Change embedding/RAG settings? (y/N): " CHANGE_EMBEDDING
+  if [[ "${CHANGE_EMBEDDING,,}" =~ ^y ]]; then
+    SKIP_EMBEDDING=false
+  else
+    SKIP_EMBEDDING=true
+    echo -e "  ${GREEN}✅ Keeping current embedding config${NC}"
+  fi
+fi
+
+if [ "$SKIP_PERSONALITY" = "false" ]; then
 
 echo -e "\n${GREEN}🧙 Personalization setup${NC}"
 echo "────────────────────────────"
@@ -921,12 +965,28 @@ echo ""
 echo "  Custom personality (optional — overrides the above):"
 echo "  Describe exactly how the agent should behave, in your own words."
 echo "  Leave empty to use the settings above."
-read -rp "  Custom persona: " CUSTOM_PERSONA
-if [ -n "$CUSTOM_PERSONA" ]; then
+# Show existing custom persona if it differs from the standard pattern
+EXISTING_CUSTOM_PERSONA=""
+if [ -n "$EXISTING_PERSONA" ] && [[ "$EXISTING_PERSONA" != *"a helpful AI assistant"* ]]; then
+  EXISTING_CUSTOM_PERSONA="$EXISTING_PERSONA"
+  echo -e "  Current: ${EXISTING_CUSTOM_PERSONA:0:80}..."
+fi
+read -rp "  Custom persona [${EXISTING_CUSTOM_PERSONA:+keep current}]: " CUSTOM_PERSONA
+USE_FULL_PERSONA=""
+if [ -z "$CUSTOM_PERSONA" ] && [ -n "$EXISTING_CUSTOM_PERSONA" ]; then
+  # Keep existing custom persona as-is (it's the full persona string from DB)
+  USE_FULL_PERSONA="$EXISTING_CUSTOM_PERSONA"
+  PROACTIVE=""
+  echo -e "  ${GREEN}✅ Keeping current custom persona${NC}"
+elif [ -n "$CUSTOM_PERSONA" ]; then
   STYLE="$CUSTOM_PERSONA"
   PROACTIVE=""
   echo -e "  ${GREEN}✅ Using custom persona${NC}"
 fi
+
+fi # end SKIP_PERSONALITY
+
+if [ "$SKIP_EMBEDDING" = "false" ]; then
 
 echo ""
 echo -e "${GREEN}🧠 RAG / Vector Memory (optional)${NC}"
@@ -978,6 +1038,8 @@ if [ -z "$OPENAI_API_KEY" ] || [[ "$OPENAI_API_KEY" == "your_"* ]]; then
   fi
 fi
 
+fi # end SKIP_EMBEDDING
+
 # Write embedding + anthropic config to DB (tools_config table)
 # Workflows read config from DB at runtime, not from env vars
 if [ -n "$EMBEDDING_API_KEY" ]; then
@@ -1008,6 +1070,8 @@ env = {**os.environ, 'PGPASSWORD': pw, 'LANG': 'C', 'LC_ALL': 'C'}
 def esc(s):
     return s.replace("'", "''")
 
+skip_persona = '${SKIP_PERSONA_WRITE}' == 'true'
+full_persona = esc('${USE_FULL_PERSONA}')
 bot     = esc('${BOT_NAME}')
 user    = esc('${USER_DISPLAY}')
 lang    = esc('${PREFERRED_LANG}')
@@ -1019,16 +1083,31 @@ mcp_url = '${N8N_URL_FOR_MCP}'
 tz      = esc('${TIMEZONE:-UTC}')
 uname   = user.lower().replace(' ', '_')
 
-sql = f"""
+# Build persona: use full persona from DB if keeping existing custom, otherwise build from template
+if full_persona:
+    persona_value = full_persona
+    vibe_value = full_persona
+else:
+    persona_value = f'You are {bot}, a helpful AI assistant for {user}. Preferred language: {lang}. {style}'
+    vibe_value = style
+
+sql = ""
+
+# Only write soul table if personality was changed
+if not skip_persona:
+    sql += f"""
 INSERT INTO public.soul (key, content) VALUES
   ('name', '{bot}'),
-  ('persona', 'You are {bot}, a helpful AI assistant for {user}. Preferred language: {lang}. {style}'),
-  ('vibe', '{style}'),
+  ('persona', '{persona_value}'),
+  ('vibe', '{vibe_value}'),
   ('proactive', '{proact}'),
   ('boundaries', 'Keep private data private. Ask before external actions.'),
   ('communication', 'You communicate via Telegram. Reply directly.')
 ON CONFLICT (key) DO UPDATE SET content = EXCLUDED.content;
+"""
 
+# Always update user_profiles and mcp_registry (uses existing values when personality was skipped)
+sql += f"""
 INSERT INTO public.user_profiles (user_id, name, display_name, timezone, context, preferences, setup_done, setup_step)
 VALUES ('telegram:{chat_id}', '{uname}', '{user}', '{tz}', '{ctx}', '{{"language": "{lang}"}}'::jsonb, false, 0)
 ON CONFLICT (user_id) DO UPDATE SET
@@ -1212,7 +1291,6 @@ if [ "${SOUL_COUNT:-0}" -gt 0 ]; then
 else
   echo -e "  ${RED}❌ Soul table empty — DB write failed. Check postgres connection.${NC}"
 fi
-fi  # end INSTALL_MODE guard for personalization
 
 # ── Seed heartbeat_config ──────────────────────────────────────
 echo -e "${CYAN}Seeding heartbeat configuration...${NC}"
