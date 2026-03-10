@@ -13,6 +13,7 @@ Talk to your agent in natural language — it manages tasks, remembers context a
 - **Morning briefing** — daily summary of your tasks at a time you choose
 - **MCP Server Builder** — builds new API integrations on demand (just ask: *"build me an MCP server for the GitHub API"*)
 - **Smart reminders** — timed Telegram reminders ("remind me in 2 hours to...")
+- **Scheduled tasks** — the agent executes instructions at a set time ("search HN for AI news at 9am")
 - **Web search** — searches the web via built-in SearXNG instance (no API key needed)
 - **Extensible** — add new tools and capabilities through natural language
 
@@ -27,7 +28,7 @@ n8n-claw Agent (Claude Sonnet)
   ├── MCP Client          → calls tools on MCP Servers
   ├── MCP Builder          → creates new MCP Servers automatically
   ├── Library Manager     → install/remove MCP templates from catalog
-  ├── Reminder Factory    — timed Telegram reminders
+  ├── Reminder            — timed reminders + scheduled agent tasks
   ├── HTTP Tool           — simple web requests
   ├── Web Search          — search the web (SearXNG)
   └── Self Modify         — inspect/list n8n workflows
@@ -35,6 +36,7 @@ n8n-claw Agent (Claude Sonnet)
 Background Workflows (automated):
   💓 Heartbeat              — every 15 min: proactive reminders + morning briefing
   🧠 Memory Consolidation   — daily at 3am: summarizes conversations → long-term memory
+  ⏰ Reminder Runner         — every 1 min: sends due reminders + triggers scheduled tasks
 ```
 
 ---
@@ -129,13 +131,13 @@ These workflows are **activated automatically** by setup — no action needed:
 | 🤖 n8n-claw Agent | Main agent — receives Telegram messages, calls tools |
 | 💓 Heartbeat | Background: proactive reminders + morning briefing (every 15 min) |
 | 🧠 Memory Consolidation | Background: summarizes conversations into long-term memory (daily 3am) |
+| ⏰ Reminder Runner | Background: delivers reminders + triggers scheduled tasks (every 1 min) |
 
 These workflows need to be **activated manually** in n8n UI:
 
 | Workflow | Purpose |
 |---|---|
 | 🏗️ MCP Builder | Builds new MCP Server workflows on demand |
-| ⏰ ReminderFactory | Creates timed Telegram reminders (sub-workflow) |
 | 🌤️ MCP: Weather | Example MCP Server — weather via Open-Meteo (no API key) |
 | ⚙️ WorkflowBuilder | Builds general n8n automations *(optional — requires [extra setup](#optional-workflowbuilder-with-claude-code))* |
 
@@ -145,6 +147,7 @@ Sub-workflows (called by other workflows, no manual activation needed):
 |---|---|
 | 🔌 MCP Client | Agent — calls tools on MCP Servers |
 | 📚 MCP Library Manager | Agent — installs/removes MCP templates from catalog |
+| ⏰ ReminderFactory | Agent — saves reminders/tasks to database |
 | 🔐 credential-form | Library Manager — secure form for entering API keys |
 
 ### Step 4 — Start chatting
@@ -259,15 +262,22 @@ Tasks support priorities (`low`, `medium`, `high`, `urgent`), due dates, and sub
 
 ---
 
-## Reminders
+## Reminders & Scheduled Tasks
 
-The agent can set timed reminders that arrive as Telegram messages at the specified time.
+The agent supports two types of timed actions:
+
+**Reminders** — sends a Telegram message at the specified time:
 
 > "Remind me in 30 minutes to check the oven"
 > "Remind me tomorrow at 9am about the doctor's appointment"
 > "Set a reminder for Friday at 3pm: submit the report"
 
-Each reminder creates a temporary n8n workflow that fires once at the scheduled time, sends the Telegram message, and deletes itself.
+**Scheduled Tasks** — the agent actively executes instructions at the specified time and sends the result:
+
+> "Search Hacker News for AI articles at 9am and list them"
+> "Check the weather forecast for Berlin tomorrow at 7am and send me a summary"
+
+Both are stored in the database and delivered by the **Reminder Runner** — a background workflow that polls every minute. Missed reminders (e.g. if n8n was briefly down) are automatically delivered on the next run.
 
 ---
 
@@ -321,6 +331,7 @@ Edit the `soul` and `agents` tables directly in Supabase Studio (`http://localho
 | `agents` | Tool instructions, MCP config, memory behavior — loaded into system prompt |
 | `user_profiles` | User name, timezone, preferences (language, morning briefing) |
 | `tasks` | Task management (title, status, priority, due date, subtasks) |
+| `reminders` | Scheduled reminders + tasks (message, time, type, delivery status) |
 | `heartbeat_config` | Heartbeat + morning briefing settings (enabled, last_run, intervals) |
 | `tools_config` | API keys for Anthropic, embedding provider — used by Heartbeat + Consolidation |
 | `mcp_registry` | Available MCP servers (name, URL, tools) |
