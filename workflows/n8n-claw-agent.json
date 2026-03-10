@@ -926,7 +926,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Save conversation to Supabase\nconst userMessage = $('Build System Prompt').first().json.userMessage;\nconst assistantMessage = $('AI Agent').first().json.output;\nconst sessionId = $('Build System Prompt').first().json.sessionId;\nconst userId = $('Build System Prompt').first().json.userId;\n\n// Mark onboarding as done after first response\nconst setupDone = $('Load User Profile').first()?.json?.setup_done;\nconst markSetupDone = setupDone === false;\n\nreturn [{\n  json: {\n    userMessage,\n    assistantMessage,\n    sessionId,\n    userId,\n    markSetupDone\n  }\n}];"
+        "jsCode": "// Save conversation to Supabase\nconst userMessage = $('Build System Prompt').first().json.userMessage;\nconst assistantMessage = $('AI Agent').first().json.output;\nconst sessionId = $('Build System Prompt').first().json.sessionId;\nconst userId = $('Build System Prompt').first().json.userId;\n\n// Mark onboarding as done after first response\nconst setupDone = $('Load User Profile').first()?.json?.setup_done;\nconst markSetupDone = setupDone === false;\n\n// Escape $ followed by digits — pg-promise interprets $N as parameter placeholders\nfunction pgSafe(s) { return (s || '').replace(/\\$/g, () => '$$'); }\n\nreturn [{\n  json: {\n    userMessage: pgSafe(userMessage),\n    assistantMessage: pgSafe(assistantMessage),\n    sessionId,\n    userId,\n    markSetupDone\n  }\n}];"
       },
       "id": "prepare-save",
       "name": "Prepare Save",
