@@ -11,6 +11,7 @@ Talk to your agent in natural language — it manages tasks, remembers context a
 - **Task management** — create, track, and complete tasks with priorities and due dates
 - **Proactive heartbeat** — automatically reminds you of overdue/urgent tasks
 - **Morning briefing** — daily summary of your tasks at a time you choose
+- **Expert agents** — delegate complex tasks to specialized sub-agents (3 included, expandable from catalog)
 - **MCP Skills** — install pre-built skills or build new API integrations on demand
 - **Smart reminders** — timed Telegram reminders ("remind me in 2 hours to...")
 - **Scheduled actions** — the agent executes instructions at a set time ("search HN for AI news at 9am")
@@ -232,6 +233,41 @@ Want to create your own skills? See the [template contribution guide](https://gi
 > **Mitigation:** Secure SSH access (key-based auth, no root password, fail2ban), and use API keys with minimal permissions where possible.
 >
 > Encryption at rest for skill credentials is planned and in progress.
+
+---
+
+## Expert Agents
+
+Delegate complex tasks to specialized sub-agents. Each expert has its own AI agent with a focused persona, tools (web search, HTTP requests, web reader, MCP), and works independently — then the main agent rephrases the result in its own tone.
+
+**Three experts are included by default:**
+
+| Agent | Speciality |
+|---|---|
+| 🔍 Research Expert | Web research, fact-checking, source evaluation, structured summaries |
+| ✍️ Content Creator | Copywriting, social media posts, blog articles, marketing copy |
+| 📊 Data Analyst | Data analysis, pattern recognition, KPI interpretation, structured reports |
+
+**Using expert agents:**
+
+> "Research the best hiking trails in Tyrol with sources"
+> "Write an Instagram post about our new product launch"
+> "Analyze these numbers and give me a summary"
+
+The agent automatically picks the right expert based on your request — or you can ask explicitly:
+
+> "Let the research expert look into this"
+> "Delegate this to the content creator"
+
+**Managing agents:**
+
+> "What expert agents do I have?"
+> "Install the data analyst"
+> "Remove the content creator"
+
+Install more experts from the [agent catalog](https://github.com/freddy-schuetz/n8n-claw-agents) or ask the community to contribute new ones.
+
+**Status updates:** During long-running expert tasks, the agent sends you Telegram progress updates so you know what's happening (e.g. "🔍 Starting research expert...").
 
 ---
 
