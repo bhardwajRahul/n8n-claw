@@ -1396,6 +1396,12 @@ Data analysis, pattern recognition, structured reports, KPI interpretation.
 - Derive actionable recommendations when possible
 - Distinguish between correlation and causation'),
 
+  ('telegram_status', 'You have a Telegram Status tool. Use it for brief progress updates during longer tasks, e.g.:
+- Before delegating to an expert agent: "🔍 Starting research expert..."
+- For project actions: "💾 Saving project context..."
+- For web research: "🌐 Searching for information..."
+Not for every small action — only when the user would otherwise wait >10 seconds without feedback.'),
+
   ('expert_agents', 'You have Expert Agents — specialized sub-agents you can delegate tasks to.
 
 ## Expert Agent Tool (expert_agent)
