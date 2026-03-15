@@ -1457,8 +1457,7 @@
         "chatId": "{{TELEGRAM_CHAT_ID}}",
         "text": "={{ $fromAI('Text', '', 'string') }}",
         "additionalFields": {
-          "appendAttribution": false,
-          "parse_mode": "MarkdownV2"
+          "appendAttribution": false
         }
       },
       "id": "tool-telegram-status",
