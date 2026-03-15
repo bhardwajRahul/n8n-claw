@@ -1458,7 +1458,7 @@
         "text": "={{ $fromAI('Text', '', 'string') }}",
         "additionalFields": {
           "appendAttribution": false,
-          "parse_mode": "Markdown"
+          "parse_mode": "MarkdownV2"
         }
       },
       "id": "tool-telegram-status",
