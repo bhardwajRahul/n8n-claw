@@ -597,6 +597,12 @@ for f in workflows/*.json; do
 done
 IMPORT_ORDER="mcp-client reminder-factory reminder-runner mcp-weather-example workflow-builder mcp-builder mcp-library-manager agent-library-manager sub-agent-runner credential-form memory-consolidation heartbeat n8n-claw-agent"
 
+# n8n Public API settings whitelist — the PUT endpoint rejects any settings
+# field not in its OpenAPI schema (additionalProperties: false), even though
+# the GET response may include extra fields like binaryMode, timeSavedMode.
+# See: https://github.com/n8n-io/n8n/issues/19587
+N8N_SETTINGS_WHITELIST="saveExecutionProgress,saveManualExecutions,saveDataErrorExecution,saveDataSuccessExecution,executionTimeout,errorWorkflow,timezone,executionOrder,callerPolicy,callerIds,timeSavedPerExecution,availableInMCP"
+
 # Fetch existing workflows once (for upsert: update if exists, create if not)
 EXISTING_WFS=$(curl -s "${N8N_BASE}/api/v1/workflows?limit=100" \
   -H "X-N8N-API-KEY: ${N8N_API_KEY}")
@@ -620,12 +626,14 @@ for wf in data.get('data', []):
     # UPDATE existing workflow (PUT) — preserves workflow ID, no duplicates
     UPDATE_BODY=$(python3 -c "
 import json, sys
+ALLOWED = set('${N8N_SETTINGS_WHITELIST}'.split(','))
 wf = json.load(open(sys.argv[1]))
+settings = {k: v for k, v in wf.get('settings', {}).items() if k in ALLOWED}
 print(json.dumps({
     'name': wf['name'],
     'nodes': wf.get('nodes', []),
     'connections': wf.get('connections', {}),
-    'settings': wf.get('settings', {})
+    'settings': settings
 }))
 " "$f" 2>/dev/null)
     resp=$(curl -s -X PUT "${N8N_BASE}/api/v1/workflows/${existing_id}" \
@@ -658,6 +666,7 @@ if [ -n "$AGENT_WF_ID" ]; then
 
   PATCHED=$(echo "$AGENT_JSON" | python3 -c "
 import sys, json
+ALLOWED = set('${N8N_SETTINGS_WHITELIST}'.split(','))
 raw = sys.stdin.read()
 replacements = {
   'REPLACE_REMINDER_FACTORY_ID': '${WF_IDS[reminder-factory]}',
@@ -673,7 +682,8 @@ for placeholder, real_id in replacements.items():
 wf = json.loads(raw)
 nodes = wf.get('nodes') or wf.get('activeVersion',{}).get('nodes',[])
 conns = wf.get('connections') or wf.get('activeVersion',{}).get('connections',{})
-print(json.dumps({'name': wf['name'], 'nodes': nodes, 'connections': conns, 'settings': wf.get('settings',{})}))
+settings = {k: v for k, v in wf.get('settings',{}).items() if k in ALLOWED}
+print(json.dumps({'name': wf['name'], 'nodes': nodes, 'connections': conns, 'settings': settings}))
 " 2>/dev/null)
 
   if [ -n "$PATCHED" ]; then
@@ -732,12 +742,14 @@ if [ -n "$REMINDER_RUNNER_WF_ID" ] && [ -n "$AGENT_WF_ID_FOR_RUNNER" ]; then
 
   PATCHED_RUNNER=$(echo "$RUNNER_JSON" | python3 -c "
 import sys, json
+ALLOWED = set('${N8N_SETTINGS_WHITELIST}'.split(','))
 raw = sys.stdin.read()
 raw = raw.replace('REPLACE_AGENT_WORKFLOW_ID', '${AGENT_WF_ID_FOR_RUNNER}')
 wf = json.loads(raw)
 nodes = wf.get('nodes') or wf.get('activeVersion',{}).get('nodes',[])
 conns = wf.get('connections') or wf.get('activeVersion',{}).get('connections',{})
-print(json.dumps({'name': wf['name'], 'nodes': nodes, 'connections': conns, 'settings': wf.get('settings',{})}))
+settings = {k: v for k, v in wf.get('settings',{}).items() if k in ALLOWED}
+print(json.dumps({'name': wf['name'], 'nodes': nodes, 'connections': conns, 'settings': settings}))
 " 2>/dev/null)
 
   if [ -n "$PATCHED_RUNNER" ]; then
