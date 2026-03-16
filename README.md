@@ -2,6 +2,9 @@
 
 A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you via Telegram, builds its own MCP tools, manages reminders and memory — all running on your own infrastructure.
 
+**Short Introduction**
+https://github.com/user-attachments/assets/10b7b93d-f482-47c1-a144-80a1b9d1be16
+
 ## What it does
 
 Talk to your agent in natural language — it manages tasks, remembers context across conversations, builds API integrations, and proactively keeps you on track.
