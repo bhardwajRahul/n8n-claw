@@ -417,6 +417,15 @@ if [ "$STATUS" != "200" ]; then
 fi
 
 # ── 10b. Create n8n credentials (after API is confirmed ready) ──
+# Wait for credentials endpoint too (may lag behind workflows after restart)
+for i in {1..10}; do
+  CRED_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
+    "${N8N_BASE}/api/v1/credentials" 2>/dev/null)
+  [ "$CRED_CHECK" = "200" ] && break
+  sleep 2
+done
+
 if [ "$INSTALL_MODE" = "update" ] && [ "$FORCE_FLAG" != "--force" ]; then
   echo -e "\n${GREEN}🔑 Skipping credential creation (update mode)${NC}"
 else
