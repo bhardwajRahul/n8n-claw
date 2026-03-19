@@ -211,7 +211,7 @@
       "typeVersion": 2,
       "position": [740, 0],
       "parameters": {
-        "jsCode": "const agentOutput = $('Checker Agent').first().json.output || '';\nconst isSilent = agentOutput.trim() === '[SILENT]' || agentOutput.trim().startsWith('[SILENT]');\n\nreturn [{\n  json: {\n    notify: !isSilent,\n    message: isSilent ? '' : agentOutput\n  }\n}];"
+        "jsCode": "const agentOutput = $('Checker Agent').first().json.output || '';\nconst isSilent = agentOutput.includes('[SILENT]');\n\nreturn [{\n  json: {\n    notify: !isSilent,\n    message: isSilent ? '' : agentOutput\n  }\n}];"
       }
     }
   ]
