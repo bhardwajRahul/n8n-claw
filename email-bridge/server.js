@@ -16,7 +16,8 @@ app.get('/health', (_req, res) => {
 app.post('/read-emails', async (req, res) => {
   const {
     host, port = 993, user, password,
-    folder = 'INBOX', limit = 10, since
+    folder = 'INBOX', limit = 10, since,
+    before, unseen, from
   } = req.body;
 
   if (!host || !user || !password) {
@@ -38,18 +39,27 @@ app.post('/read-emails', async (req, res) => {
     try {
       const searchCriteria = {};
       if (since) {
-        searchCriteria.since = new Date(since);
+        // IMAP SINCE is date-only (no time component)
+        // Normalize to start of day to avoid timezone/time issues
+        const d = new Date(since);
+        d.setUTCHours(0, 0, 0, 0);
+        searchCriteria.since = d;
       }
+      if (before) {
+        const d = new Date(before);
+        d.setUTCHours(0, 0, 0, 0);
+        searchCriteria.before = d;
+      }
+      if (unseen) searchCriteria.seen = false;
+      if (from) searchCriteria.from = from;
 
       const messages = [];
-      const fetchOptions = { envelope: true, source: false, bodyStructure: true };
 
-      // Get message sequence numbers matching criteria
-      let query = since ? searchCriteria : { all: true };
-      const uids = [];
-      for await (const msg of client.fetch(query, { envelope: true, uid: true })) {
-        uids.push(msg.uid);
-      }
+      // Search for matching UIDs using IMAP SEARCH
+      const hasCriteria = Object.keys(searchCriteria).length > 0;
+      const uids = hasCriteria
+        ? await client.search(searchCriteria, { uid: true })
+        : await client.search({ all: true }, { uid: true });
 
       // Take the most recent N messages
       const recentUids = uids.slice(-Number(limit));
