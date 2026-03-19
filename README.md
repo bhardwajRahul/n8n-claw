@@ -1,6 +1,6 @@
 # 🤖 n8n-claw — Self-Hosted AI Agent
 
-A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you via Telegram, builds its own MCP tools, manages reminders and memory — all running on your own infrastructure.
+A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you via Telegram or HTTP API (Slack, Teams, custom apps), builds its own MCP tools, manages reminders and memory — all running on your own infrastructure.
 
 **Short Introduction**
 
@@ -11,6 +11,7 @@ https://github.com/user-attachments/assets/10b7b93d-f482-47c1-a144-80a1b9d1be16
 Talk to your agent in natural language — it manages tasks, remembers context across conversations, builds API integrations, and proactively keeps you on track.
 
 - **Telegram chat** — talk to your AI agent directly via Telegram
+- **Webhook API** — call the agent from any external system via HTTP (Slack, Teams, Paperclip, custom apps)
 - **Long-term memory** — remembers conversations and important context with optional semantic search (RAG)
 - **Task management** — create, track, and complete tasks with priorities and due dates
 - **Proactive heartbeat** — automatically reminds you of overdue/urgent tasks
@@ -28,8 +29,10 @@ Talk to your agent in natural language — it manages tasks, remembers context a
 ## Architecture
 
 ```
-Telegram
-  ↓
+Telegram  ───────────────────────────────────┐
+Webhook API (POST /webhook/agent)  ───────┐
+  │                                     │
+  └─────────────────▼─────────────────────┘
 n8n-claw Agent (Claude Sonnet)
   ├── Task Manager        — create, track, complete tasks
   ├── Project Manager     — persistent project notes (markdown)
@@ -45,6 +48,14 @@ n8n-claw Agent (Claude Sonnet)
   ├── Web Search          — search the web (SearXNG)
   ├── Web Reader          — read webpages as markdown (Crawl4AI)
   └── Self Modify         — inspect/list n8n workflows
+  │
+  ├── Webhook caller? → JSON response to HTTP caller
+  └── Telegram?      → Telegram Reply
+
+Webhook Adapter (optional, connects external systems):
+  💬 Slack Trigger    ──┐
+  💬 Teams Trigger    ──┼── Map Input → POST /webhook/agent → Route Response
+  🌐 Generic Webhook  ──┘
 
 Background Workflows (automated):
   💓 Heartbeat              — every 5 min: recurring actions + proactive reminders
@@ -111,6 +122,7 @@ The easiest way is to open each workflow and click **"Create new credential"** d
 | Anthropic API | `Anthropic API` | Agent (Claude node), MCP Builder, Sub-Agent Runner |
 | Telegram Bot | `Telegram Bot` | Agent (Telegram Trigger + Reply) — *created automatically by setup* |
 | OpenAI API | `OpenAI API` | Agent (Voice transcription via Whisper) — *optional, created by setup if key provided* |
+| Webhook Auth | `Webhook Auth` | Agent + Adapter (Webhook Triggers) — *created automatically by setup* |
 
 **⚠️ After fresh install — connect credentials in these workflows:**
 
@@ -151,7 +163,7 @@ These workflows are **activated automatically** by setup — no action needed:
 
 | Workflow | Purpose |
 |---|---|
-| 🤖 n8n-claw Agent | Main agent — receives Telegram messages, calls tools |
+| 🤖 n8n-claw Agent | Main agent — receives Telegram + Webhook messages, calls tools |
 | 💓 Heartbeat | Background: recurring actions + proactive reminders (every 5 min) |
 | 🔍 Background Checker | Sub-workflow: silent background checks, only notifies on changes |
 | 🧠 Memory Consolidation | Background: summarizes conversations into long-term memory (daily 3am) |
@@ -175,10 +187,22 @@ Sub-workflows (called by other workflows, no manual activation needed):
 | 📖 Agent Library Manager | Agent — installs/removes expert agents |
 | ⏰ ReminderFactory | Agent — saves reminders/tasks to database |
 | 🔐 credential-form | Library Manager — secure form for entering API keys |
+| 🔌 Webhook Adapter | Connects Slack, Teams, and custom apps to the agent (imported inactive) |
 
 ### Step 4 — Start chatting
 
 Send a message to your Telegram bot. It's ready!
+
+You can also test the webhook API:
+
+```bash
+curl -X POST https://YOUR-DOMAIN/webhook/agent \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_WEBHOOK_SECRET" \
+  -d '{"message": "Hello!", "user_id": "test-user"}'
+```
+
+The `WEBHOOK_SECRET` is shown at the end of setup output (also in `.env`).
 
 ---
 
@@ -190,6 +214,8 @@ After setup, these services run:
 |---|---|---|
 | n8n | `http://YOUR-IP:5678` | Workflow editor |
 | Supabase Studio | `http://localhost:3001` (via SSH tunnel) | Database admin UI |
+| Webhook API | `https://YOUR-DOMAIN/webhook/agent` | Agent HTTP endpoint (POST, requires X-API-Key header) |
+| Webhook Adapter | `https://YOUR-DOMAIN/webhook/adapter` | Multi-system adapter endpoint (POST) |
 | PostgREST API | `http://kong:8000` (Docker-internal only) | REST API for PostgreSQL |
 
 ### Accessing Supabase Studio
@@ -204,6 +230,99 @@ Then open `http://localhost:3001` in your browser. The tunnel stays open as long
 
 ---
 
+## Webhook API & External Integrations
+
+n8n-claw exposes an HTTP API so external systems can talk to the agent — no Telegram required.
+
+### Direct Webhook API
+
+Any system that can make HTTP requests can call the agent directly:
+
+```
+POST {{N8N_URL}}/webhook/agent
+Header: X-API-Key: {{WEBHOOK_SECRET}}
+Content-Type: application/json
+
+{
+  "message": "What is the weather in Berlin?",
+  "user_id": "my-app-user-123",
+  "session_id": "my-app:conv-456",
+  "source": "my-app",
+  "metadata": { "any": "data you want back" }
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "response": "The weather in Berlin is...",
+  "session_id": "my-app:conv-456",
+  "source": "my-app",
+  "metadata": { "any": "data you want back" }
+}
+```
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `message` | yes | — | The user's message |
+| `user_id` | yes | — | Unique user identifier |
+| `session_id` | no | `api:{user_id}` | Conversation session ID (for history) |
+| `source` | no | `api` | Source identifier (appears in logs) |
+| `metadata` | no | `{}` | Arbitrary data — round-trips back in the response |
+
+The agent uses `session_id` and `user_id` (with source prefix) for conversation history and user profiles — same as Telegram, just with different prefixes.
+
+### Webhook Adapter (Slack, Teams, Paperclip)
+
+For systems that need input/output mapping (different message formats, response routing), use the **Webhook Adapter** workflow. It translates between external formats and the agent's webhook API.
+
+The adapter ships with three triggers:
+
+| Trigger | Default state | Use case |
+|---|---|---|
+| **Generic Webhook** (`/webhook/adapter`) | Active | Paperclip, custom apps, other n8n instances |
+| **Slack Trigger** | Disabled | Slack workspace integration |
+| **Teams Trigger** | Disabled | Microsoft Teams integration |
+
+Each trigger has a mapper node that normalizes messages → calls `/webhook/agent` → routes the response back to the right system via `metadata._responseChannel`.
+
+### Enabling Slack
+
+1. **Create a Slack App** at [api.slack.com/apps](https://api.slack.com/apps)
+2. **Add Bot Token Scopes** under OAuth & Permissions: `chat:write`, `channels:history`, `channels:read`
+3. **Install to workspace** and copy the Bot Token (`xoxb-...`)
+4. **In n8n**: Create a Slack API credential (Bot Token + Signing Secret)
+5. **Enable the Slack Trigger + Slack Reply** nodes in the Webhook Adapter workflow
+6. **Activate the Webhook Adapter** workflow
+7. **In Slack App settings**: Add the Slack Trigger's webhook URL under Event Subscriptions
+8. **Subscribe to bot events**: `message.channels` (public channels), `message.im` (direct messages)
+9. **Invite the bot** to your Slack channel (`/invite @YourBotName`)
+
+> ⚠️ The Slack Trigger webhook URL changes when the adapter workflow is re-created (e.g. `setup.sh --force`). Update the Event Subscriptions URL in your Slack App after each reinstall.
+
+### Enabling Teams
+
+1. **Register a Bot** in [Azure Portal](https://portal.azure.com) (Bot Framework)
+2. **Create App ID + Client Secret**
+3. **Set Messaging Endpoint** to the Teams Trigger's webhook URL
+4. **In n8n**: Create a Microsoft Teams OAuth2 credential
+5. **Enable the Teams Trigger + Teams Reply** nodes in the Webhook Adapter workflow
+6. **Activate the Webhook Adapter** workflow
+
+### Adding a Custom Integration
+
+To connect a new system:
+
+1. Add a new **Trigger node** in the Webhook Adapter workflow
+2. Add a new **Map node** (Code node) that outputs: `{ message, user_id, session_id, source, metadata: { _responseChannel: "your-system" } }`
+3. Add a matching output in the **Route Response** switch node
+4. Add a **Reply node** for your system
+
+The `_responseChannel` value in metadata tells the adapter where to route the agent's response.
+
+---
 ## MCP Skills Library
 
 Install pre-built skills from the [skill catalog](https://github.com/freddy-schuetz/n8n-claw-templates) — no coding required. Just ask your agent:
