@@ -1170,6 +1170,9 @@ BEGIN
   END IF;
 END $$;
 
+-- Add notify_mode column for existing installations (CREATE TABLE IF NOT EXISTS skips new columns)
+ALTER TABLE public.scheduled_actions ADD COLUMN IF NOT EXISTS notify_mode TEXT NOT NULL DEFAULT 'always';
+
 CREATE INDEX IF NOT EXISTS idx_scheduled_actions_due ON public.scheduled_actions (next_run) WHERE enabled = true;
 CREATE INDEX IF NOT EXISTS idx_scheduled_actions_user ON public.scheduled_actions (user_id);
 
