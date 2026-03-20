@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo-with-text.png" alt="n8n-claw logo" width="200">
+</p>
+
 # n8n-claw — Self-Hosted AI Agent
 
 A fully self-hosted AI agent built on n8n + PostgreSQL + Claude. Talks to you via Telegram or HTTP API (Slack, Teams, custom apps), builds its own MCP tools, manages reminders and memory — all running on your own infrastructure.
